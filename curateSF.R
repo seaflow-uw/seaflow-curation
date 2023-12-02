@@ -341,7 +341,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   stat[id7, 'flag'] <- 3
   
   ## Abundance:  all populations ##
-  if(curate$spar.8 == "missing"){
+  if(curate$spar.8 == "missing" | curate$spar.8 == "NULL"){
     curate$spar.8 <- NULL
   }
   
