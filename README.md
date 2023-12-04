@@ -14,7 +14,7 @@ USAGE:
 for (cruise in cruise_list){
   print(cruise)
   db <- paste0(path, cruise, '/', cruise, ".vct.db")
-  curateSF(db, paste(local_path, "cruises/", cruise), show_plots = TRUE)
-}
+  curateSF(db, paste(local_path, "cruises/", cruise), show_plots = TRUE)}
 ```
+
 Annette Hynes, Baker Van Buren, Chris Berthiaume, and François Ribalet contributed to this project.
