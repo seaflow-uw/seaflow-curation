@@ -393,10 +393,12 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   
   # This step can take a few seconds . . .
   
-  #reset_outlier_table(db)
-  #df <- stat[match(unique(stat$file_id),stat$file_id),]
-  #outlier <- data.frame(file_id=df$file_id, flag=df$flag)
-  #save_outliers(db, outliers=outlier)
+  #popcycle::reset_outlier_table(db)
+  df <- stat[match(unique(stat$file_id),stat$file_id),]
+  outliers <- data.frame(file = df$file_id, flag = df$flag)
+  outfile <- paste0(save_path, cruise, ".outlier.tsv")
+  write.table(outliers, file = outfile, row.names = FALSE, sep = "\t")
+  #popcycle::save_outliers(db, outliers=outlier)
   
   print(paste0(round(100*nrow(stat[which(stat$flag != 0),])/nrow(stat)), '% outliers'))
   
