@@ -69,8 +69,8 @@ curateSF <- function(db, save_path, show_plots = FALSE){
       out1 <- which(df$time >= tcut1)
     }
   
-    p <- df %>% ggplot() + geom_point(aes_string('time', para, fill='quantile'), pch=21, size=3, alpha=0.25) + 
-      geom_point(data=df[out1, ], aes_string('time', para), pch=21, size=3, alpha=1, fill=col.l) 
+    p <- df %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) + 
+      geom_point(data=df[out1, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) 
     nout <- length(out1)
     
     if (!is.na(curate$tcut2)){ # one cruise has two time cut-offs
@@ -82,7 +82,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
       }
       
       p <- p +
-        geom_point(data=df[out2, ], aes_string('time', para), pch=21, size=3, alpha=1, fill=col.l) 
+        geom_point(data=df[out2, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) 
       
       nout <- length(out1) + length(out2)
     } # end second time cut
@@ -114,8 +114,8 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   df <- subset(stat, flag==0 & pop == 'unknown')
   out <- which(df[, para] > curate$lim1_2 | df[, para] < curate$lim1_1)
   
-  p <- df %>% ggplot() + geom_point(aes_string('time', para), pch=21, size=3, alpha=0.25, fill = "grey") + 
-    geom_point(data=df[out,], aes_string('time', para), pch=21, size=3, alpha=0.25, fill = col.t) +
+  p <- df %>% ggplot() + geom_point(aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = "grey") + 
+    geom_point(data=df[out,], aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = col.t) +
     geom_hline(yintercept = c(curate$lim1_1, curate$lim1_2), color=col.t, linetype = "dashed")
   
   if (show_plots){
@@ -143,8 +143,8 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   res <- residuals(model)
   out2 <- which(res < -curate$fact.sd2*sd(res) | res > curate$fact.sd2*sd(res))
   
-  p <- df1 %>% ggplot() + geom_point(aes_string('date', para), pch=21, size=3, alpha=0.25, fill="grey") + 
-    geom_point(data=df1[out1,], aes_string('date', para), pch=21, size=3, alpha=0.25, fill=col.t) + 
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") + 
+    geom_point(data=df1[out1,], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) + 
     geom_hline(yintercept = c(curate$lim2_1, curate$lim2_2), color=col.t, linetype="dashed") +
     geom_point(data=df2[out2,], aes(date, event_rate), pch=21, size=3, alpha=0.25, fill=col.l)
   
@@ -173,10 +173,10 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   res <- residuals(model)
   out2 <- which(res < -curate$fact.sd3*sd(res) | res > curate$fact.sd3*sd(res))
   
-  p <- df1 %>% ggplot() + geom_point(aes_string('date', para), pch=21, size=3, alpha=0.25, fill="grey") + 
-    geom_point(data=df1[out1,], aes_string('date', para), pch=21, size=3, alpha=0.25, fill=col.t) + 
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") + 
+    geom_point(data=df1[out1,], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) + 
     geom_hline(yintercept = c(curate$lim3_1, curate$lim3_2), color=col.t, linetype="dashed") +
-    geom_point(data=df2[out2,], aes_string('date', para), pch=21, size=3, alpha=0.25, fill=col.l) 
+    geom_point(data=df2[out2,], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.l) 
   
   if (show_plots){
     print(p)        
@@ -206,8 +206,8 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   df1$log_abundance <- log10(df1$abundance)
   options(repr.plot.width=8, repr.plot.height=8)
   
-  p <- df1 %>% ggplot() + geom_point(aes_string('time', para, fill='log_abundance'), pch=21, size=3, alpha=0.25) + 
-    geom_point(data=df1[out1,], aes_string('time', para), pch=21, size=3, fill=col.t) +
+  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='log_abundance'), pch=21, size=3, alpha=0.25) + 
+    geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
     geom_hline(yintercept = c(curate$lim4_1, curate$lim4_2), color=col.t, linetype="dashed") +
     geom_hline(yintercept=fsc.beads, color=rep(c('red','green','blue'),3)) +
     ggtitle(paste(phyto)) +    
@@ -242,10 +242,10 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   res <- residuals(model)
   out2 <- which(res < -curate$fact.sd5*sd(res) | res > curate$fact.sd5*sd(res))
   
-  p <- df1 %>% ggplot() + geom_point(aes_string('date', para, fill='quantile'), pch=21, size=3, alpha=0.25) + 
-    geom_point(data=df1[out1,], aes_string('date', para), pch=21, size=3, fill=col.t) + 
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+    geom_point(data=df1[out1,], aes(date, .data[[para]]), pch=21, size=3, fill=col.t) + 
     geom_hline(yintercept = c(curate$lim5_1, curate$lim5_2), color=col.t, linetype="dashed") +
-    geom_point(data=df2[out2,], aes_string('date', para), pch=21, size=3, fill=col.l) +
+    geom_point(data=df2[out2,], aes(date, .data[[para]]), pch=21, size=3, fill=col.l) +
     scale_y_continuous(trans='log10')
   
   if (show_plots){
@@ -286,10 +286,10 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   
     options(repr.plot.width=8, repr.plot.height=4)
   
-    p <- df1 %>% ggplot() + geom_point(aes_string('time', para, fill='quantile'), pch=21, size=3, alpha=0.25) + 
-      geom_point(data=df1[out1,], aes_string('time', para), pch=21, size=3, fill=col.t) +
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+      geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
       geom_hline(yintercept = c(curate$lim6_1, curate$lim6_2), color=col.t, linetype="dashed") +
-      geom_point(data=df2[out2,], aes_string('time', para), pch=21, size=3, fill=col.l) +
+      geom_point(data=df2[out2,], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
       ggtitle(paste(phyto))
    
     if (show_plots){
@@ -324,10 +324,10 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   res <- residuals(model)
   out2 <- which(res < -curate$fact.sd7*sd(res) | res > curate$fact.sd7*sd(res))
   
-  p <- df1 %>% ggplot() + geom_point(aes_string('time', para, fill='quantile'), pch=21, size=3, alpha=0.25) + 
-    geom_point(data=df1[out1,], aes_string('time', para), pch=21, size=3, fill=col.t) +
+  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+    geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
     geom_hline(yintercept = c(curate$lim7_1, curate$lim7_2), color=col.t, linetype="dashed") +
-    geom_point(data=df2[out2,], aes_string('time', para), pch=21, size=3, fill=col.l) +
+    geom_point(data=df2[out2,], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
     ggtitle(paste(phyto))
   
   if (show_plots){
@@ -361,8 +361,8 @@ curateSF <- function(db, save_path, show_plots = FALSE){
     out <-  as.vector(unlist(data.frame(filename=unique(df1[out1,"file_id"]))))
     OUT <- unique(c(OUT, out))
     
-    p <- df1 %>% ggplot() + geom_point(aes_string('time', para, fill='quantile'), pch=21, size=3, alpha=0.25) + 
-      geom_point(data=df1[out1,], aes_string('time', para), pch=21, size=3, alpha=1, fill=col.l) +
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+      geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
       ggtitle(paste(i)) 
     
     if (show_plots){
