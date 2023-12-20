@@ -206,10 +206,10 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   df1$log_abundance <- log10(df1$abundance)
   options(repr.plot.width=8, repr.plot.height=8)
   
-  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='log_abundance'), pch=21, size=3, alpha=0.25) + 
+  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = log_abundance), pch=21, size=3, alpha=0.25) + 
     geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
     geom_hline(yintercept = c(curate$lim4_1, curate$lim4_2), color=col.t, linetype="dashed") +
-    geom_hline(yintercept=fsc.beads, color=rep(c('red','green','blue'),3)) +
+    geom_hline(yintercept = fsc.beads, color = rep(c('red','green','blue'), 3)) +
     ggtitle(paste(phyto)) +    
     scale_y_continuous(trans='log10') +
     scale_fill_viridis_c() +
@@ -242,7 +242,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   res <- residuals(model)
   out2 <- which(res < -curate$fact.sd5*sd(res) | res > curate$fact.sd5*sd(res))
   
-  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) + 
     geom_point(data=df1[out1,], aes(date, .data[[para]]), pch=21, size=3, fill=col.t) + 
     geom_hline(yintercept = c(curate$lim5_1, curate$lim5_2), color=col.t, linetype="dashed") +
     geom_point(data=df2[out2,], aes(date, .data[[para]]), pch=21, size=3, fill=col.l) +
@@ -286,7 +286,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   
     options(repr.plot.width=8, repr.plot.height=4)
   
-    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) + 
       geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
       geom_hline(yintercept = c(curate$lim6_1, curate$lim6_2), color=col.t, linetype="dashed") +
       geom_point(data=df2[out2,], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
@@ -324,7 +324,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   res <- residuals(model)
   out2 <- which(res < -curate$fact.sd7*sd(res) | res > curate$fact.sd7*sd(res))
   
-  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) + 
     geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
     geom_hline(yintercept = c(curate$lim7_1, curate$lim7_2), color=col.t, linetype="dashed") +
     geom_point(data=df2[out2,], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
@@ -361,7 +361,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
     out <-  as.vector(unlist(data.frame(filename=unique(df1[out1,"file_id"]))))
     OUT <- unique(c(OUT, out))
     
-    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill='quantile'), pch=21, size=3, alpha=0.25) + 
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) + 
       geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
       ggtitle(paste(i)) 
     
@@ -371,8 +371,6 @@ curateSF <- function(db, save_path, show_plots = FALSE){
     }
     print(paste0(round(100*length(out)/nrow(df1)), '% outliers'))    
   }
-  
-  
   
   # ONLY if satisfied with outlier detection, then
   id8 <- which(!is.na(match(stat[,"file_id"], OUT)))
@@ -384,9 +382,17 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   
   options(repr.plot.width=8, repr.plot.height=8)
   clean <- subset(stat, flag == 0 & pop != 'beads' & pop != 'unknown')
-  plot_time(clean, param = "abundance")
-  plot_time(clean, param = "diam_mid_med")
+  p <- popcycle::plot_time(clean, param = "abundance")
+  if (show_plots){
+    print(p)        
+    invisible(readline(prompt="Press [enter] to continue"))
+  }
   
+  p <- popcycle::plot_time(clean, param = "diam_mid_med")
+  if (show_plots){
+    print(p)        
+    invisible(readline(prompt="Press [enter] to continue"))
+  }
   ##########################
   ### Save outlier table ###
   ##########################
