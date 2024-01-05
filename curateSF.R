@@ -28,7 +28,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   # load stat table
   stat <- popcycle::get_stat_table(db)
   stat$time <- as.POSIXct(stat$time, format = "%FT%T", tz = "UTC") # translate time
-  stat$flag <- 0 # add a 'flag' column to the table
+  stat$flag <- 0 # add a 'flag' column to the table or set to 0
   
   # correct abundance based on Influx data
   stat <- popcycle::stat_calibration(stat, cruise)
@@ -197,8 +197,9 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   ## Beads ##
   
   phyto <- 'beads'
-  if(!any(unique(stat$pop) == phyto)) print(paste(phyto, "not found"))
-  
+  if(!any(unique(stat$pop) == phyto)){
+    print(paste(phyto, "not found"))
+  }else{
   # threshold
   para <- "fsc_med"
   df1 <- subset(stat,flag == 0 & pop == phyto)
@@ -226,6 +227,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   stat[id4.1, 'flag'] <- 2
   id4.2 <- which(!is.na(match(opp[,"file_id"], unique(df1[out1,"file_id"]))))
   opp[id4.2, 'flag'] <- 2
+  }
   
   ## Remove OPP FILTRATION outliers ##
   
@@ -306,7 +308,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
   
   ## Synechococcus ##
   
-  ### 5. Remove Synechococcus size outliers
+  ### Remove Synechococcus size outliers
   phyto <- 'synecho'
   if(!any(unique(stat$pop) == phyto)) print(paste(phyto, "not found"))
   
@@ -345,7 +347,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
     curate$spar.8 <- NULL
   }
   
-  df <- subset(stat, flag == 0)
+  df <- subset(stat, flag == 0 & quantile == 2.5)   # Easier to catch outliers when you don't consider all 3 quantiles
   para <- "abundance"
   all <- unique(df$pop)
   phyto <- all[-which(all == 'unknown' | all == 'beads')]
@@ -361,7 +363,7 @@ curateSF <- function(db, save_path, show_plots = FALSE){
     out <-  as.vector(unlist(data.frame(filename=unique(df1[out1,"file_id"]))))
     OUT <- unique(c(OUT, out))
     
-    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) + 
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]]), fill = "grey", pch=21, size=3, alpha=0.25) + 
       geom_point(data=df1[out1,], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
       ggtitle(paste(i)) 
     
