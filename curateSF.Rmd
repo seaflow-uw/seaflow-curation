@@ -1,0 +1,489 @@
+---
+title: "SeaFlow Curation Notebook"
+output: 
+  html_document:
+    toc: true
+params:
+  printcode: false
+  db: null
+  curation_config_path: null
+  save_path: null
+  fig_width: 8
+  fig_height: 4
+  warning: false
+  message: false
+  error: false
+  cache: false
+---
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(echo = params$printcode)
+knitr::opts_chunk$set(fig.width = params$fig_width)
+knitr::opts_chunk$set(fig.height = params$fig_height)
+knitr::opts_chunk$set(warning = params$warning)
+knitr::opts_chunk$set(message = params$message)
+
+db <- params$db
+curation_config_path <- params$curation_config_path
+save_path <- params$save_path
+
+# Don't run any chunks if we're missing required parameters
+knitr::opts_chunk$set(eval = !(is.null(db) || is.null(curation_config_path) || is.null(save_path)))
+
+# Plotting setup
+col.t <- "deepskyblue3"
+col.l <- "red3"
+
+library(tidyverse)
+
+# Capture report date
+report_date <- Sys.time()
+attr(report_date, "tzone") <- "UTC"
+```
+
+## Cruise
+
+```{r, cruise, results = "asis"}
+cruise <- popcycle::get_cruise(db)
+cat(cruise)
+```
+
+## Creation Date
+
+```{r, creation-date, results = "asis"}
+cat(lubridate::format_ISO8601(report_date, usetz = TRUE))
+```
+
+## Input Files
+
+* popcycle database file = `r db`
+* curation configuration file = `r curation_config_path`
+
+```{r, load-data}
+# Load curation configuration
+curate <- readr::read_tsv(curation_config_path)
+
+# load stat table
+stat <- popcycle::get_stat_table(db)
+stat$time <- lubridate::ymd_hms(stat$time)
+stat$flag <- 0 # add a 'flag' column to the table or set to 0
+
+# get bead fsc coordinates used in OPP filtration
+# TODO: fix this for multiple filtering parameters
+# Just use the first param for now
+# filter_table <- popcycle::get_filter_table(db)
+# filter_plan_table <- popcycle::get_filter_plan_table(db)
+
+fid <- unique(popcycle::get_filter_table(db)$id)[1]
+fsc.beads <- popcycle::transformData(popcycle::get_filter_params_by_id(db, fid), column="beads.fsc.small")$beads.fsc.small
+
+# load OPP table
+opp <- popcycle::get_opp_table(db, outlier_join = FALSE)
+opp <- as.data.frame(opp)
+opp$flag <- 0 # add 'flag' column to the table
+opp$event_rate <- opp[, "all_count"] / 180 # calculate event rate per sec (using total number of event recorded in 3 minutes)
+```
+
+## Outlier identification
+
+### Instrument, Flag 1
+
+#### Calibration and Testing Periods
+
+```{r, instrument-calibration}
+## Remove calibration or testing data ##
+if (!is.na(curate$tcut1)) { # applies to only a few cruises
+  df <- subset(stat, flag == 0 & pop == "unknown")
+  para <- "n_count"
+  df$quantile <- as.factor(df$quantile)
+
+  tcut1 <- as.POSIXct(curate$tcut1, format = "%Y-%m-%d %H:%M", tz = "UTC")
+
+  if (curate$tcut1_gt_lt == "leq") {
+    out1 <- which(df$time <= tcut1)
+  } else if (curate$tcut1_gt_lt == "geq") {
+    out1 <- which(df$time >= tcut1)
+  }
+
+  p <- df %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+    geom_point(data=df[out1, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l)
+  nout <- length(out1)
+
+  if (!is.na(curate$tcut2)) { # one cruise has two time cut-offs
+    tcut2 <- as.POSIXct(curate$tcut2, format = "%Y-&m-&d %H:%M", tz = "UTC")
+    if (curate$tcut2_gt_lt == "leq") {
+      out2 <- which(df$time <= tcut2)
+    } else if (curate$tcut2_gt_lt == "geq") {
+      out2 <- which(df$time >= tcut2)
+    }
+
+    p <- p +
+      geom_point(data=df[out2, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l)
+
+    nout <- length(out1) + length(out2)
+  } # end second time cut
+
+  print(p)
+
+  # Report percentage of data removed as outliers in this step
+  print(paste0(round(100 * nout / nrow(df), 2), "% outliers"))
+
+  # Set instrument issues flag (1) for time cutoffs
+  id0.1 <- which(!is.na(match(stat[, "file_id"], unique(df[out1, "file_id"]))))
+  stat[id0.1, "flag"] <- 1
+
+  id0.2 <- which(!is.na(match(opp[, "file_id"], unique(df[out1, "file_id"]))))
+  opp[id0.2, "flag"] <- 1
+
+  if (!is.na(curate$tcut2)) {
+    id0.12 <- which(!is.na(match(stat[, "file_id"], unique(df[out2, "file_id"]))))
+    stat[id0.12, "flag"] <- 1
+
+    id0.22 <- which(!is.na(match(opp[, "file_id"], unique(df[out2, "file_id"]))))
+    opp[id0.22, "flag"] <- 1
+  }
+} else {
+  cat("No calibration or testing periods in this cruise")
+}
+```
+
+#### Flow Rate
+
+```{r, instrument-flow-rate}
+## Remove FLOW_RATE outliers
+para <- "stream_pressure"
+df <- subset(stat, flag == 0 & pop == "unknown")
+out <- which(df[, para] > curate$lim1_2 | df[, para] < curate$lim1_1)
+
+print(paste0(round(100 * length(out) / nrow(df), 2), "% outliers"))
+
+p <- df %>% ggplot() + geom_point(aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = "grey") +
+  geom_point(data=df[out, ], aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = col.t) +
+  geom_hline(yintercept = c(curate$lim1_1, curate$lim1_2), color=col.t, linetype = "dashed")
+print(p)
+
+# Set instrument issues flag (1) for flow rate
+id1.1 <- which(!is.na(match(stat[, "file_id"], unique(df[out, "file_id"]))))
+stat[id1.1, "flag"] <- 1
+id1.2 <- which(!is.na(match(opp[, "file_id"], unique(df[out, "file_id"]))))
+opp[id1.2, "flag"] <- 1
+```
+
+#### Event Rate
+
+```{r, instrument-event-rate}
+## Remove EVENT_RATE outliers ##
+para <- "event_rate"
+df1 <- subset(opp, flag == 0)
+
+out1 <- which(df1[, para] > curate$lim2_2 | df1[, para] < curate$lim2_1)
+
+# low pass filter
+if (length(out1) != 0) {
+  df2 <- df1[-out1, ]
+} else {
+  df2 <- df1
+}
+out2 <- c()
+if (nrow(df2) > 0) {
+  model <- smooth.spline(df2$date, df2[, para])
+  res <- residuals(model)
+  out2 <- which(res < -curate$fact.sd2*sd(res) | res > curate$fact.sd2*sd(res))
+
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") +
+    geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) +
+    geom_hline(yintercept = c(curate$lim2_1, curate$lim2_2), color=col.t, linetype="dashed") +
+    geom_point(data=df2[out2, ], aes(date, event_rate), pch=21, size=3, alpha=0.25, fill=col.l)
+  print(p)
+}
+
+print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
+
+# Set instrument issues flag (1) for event rate
+id2.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+stat[id2.1, "flag"] <- 1
+id2.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+opp[id2.2, "flag"] <- 1
+```
+
+#### File Writing Errors
+
+```{r, instrument-file-writing}
+## Remove file writing issues ##
+para <- "evt_count"
+df1 <- subset(opp, flag == 0)
+
+out1 <- which(df1[, para] > curate$lim3_2 | df1[, para] < curate$lim3_1)
+
+# low pass filter
+if (length(out1) != 0) {
+  df2 <- df1[-out1, ]
+} else {
+  df2 <- df1
+}
+out2 <- c()
+
+if (nrow(df2) > 0) {
+  model <- smooth.spline(df2$date, df2[, para])
+  res <- residuals(model)
+  out2 <- which(res < -curate$fact.sd3*sd(res) | res > curate$fact.sd3*sd(res))
+
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") +
+    geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) +
+    geom_hline(yintercept = c(curate$lim3_1, curate$lim3_2), color=col.t, linetype="dashed") +
+    geom_point(data=df2[out2, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.l)
+  print(p)
+}
+
+print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
+
+# Set instrument issues flag (1) for file writing
+id3.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+stat[id3.1, "flag"] <- 1
+id3.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+opp[id3.2, "flag"] <- 1
+```
+
+### Virtual Core, Flag 2
+
+#### Beads
+
+```{r, virtual-core-beads, fig.width=8, fig.height=8}
+## Beads ##
+phyto <- "beads"
+if (!any(unique(stat$pop) == phyto)) {
+  print(paste(phyto, "not found"))
+} else {
+  # threshold
+  para <- "fsc_med"
+  df1 <- subset(stat, flag == 0 & pop == phyto)
+  out1 <- c()
+  if (nrow(df1) > 0) {
+    out1 <- which(df1[, para] > curate$lim4_2 | df1[, para] < curate$lim4_1)
+    df1$log_abundance <- log10(df1$abundance)
+
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = log_abundance), pch=21, size=3, alpha=0.25) +
+      geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
+      geom_hline(yintercept = c(curate$lim4_1, curate$lim4_2), color=col.t, linetype="dashed") +
+      geom_hline(yintercept = fsc.beads, color = rep(c("red", "green", "blue"), 3)) +
+      ggtitle(paste(phyto)) +
+      scale_y_continuous(trans="log10") +
+      scale_fill_viridis_c() +
+      facet_grid(quantile ~ .)
+    print(p)
+
+    # Set virtual core issues flag (2) for beads
+    id4.1 <- which(!is.na(match(stat[, "file_id"], unique(df1[out1, "file_id"]))))
+    stat[id4.1, "flag"] <- 2
+    id4.2 <- which(!is.na(match(opp[, "file_id"], unique(df1[out1, "file_id"]))))
+    opp[id4.2, "flag"] <- 2
+  }
+
+  print(paste0(round(100 * length(out1) / nrow(df), 2), "% outliers"))
+}
+```
+
+#### OPP/EVT Ratio
+
+```{r, virtual-core-opp-evt-ratio}
+## Remove OPP FILTRATION outliers ##
+para <- "opp_evt_ratio"
+df1 <- subset(opp, flag == 0)
+out1 <- which(df1[, para] > curate$lim5_2 | df1[, para] < curate$lim5_1)
+df1$quantile <- as.factor(df1$quantile)
+
+# low pass filter
+if (length(out1)!= 0) {
+  df2 <- df1[-out1, ]
+} else {
+  df2 <- df1
+}
+
+out2 <- c()
+
+if (nrow(df2) > 0) {
+
+  model <- smooth.spline(df2$date, df2[, para])
+  res <- residuals(model)
+  out2 <- which(res < -curate$fact.sd5*sd(res) | res > curate$fact.sd5*sd(res))
+
+  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+    geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, fill=col.t) +
+    geom_hline(yintercept = c(curate$lim5_1, curate$lim5_2), color=col.t, linetype="dashed") +
+    geom_point(data=df2[out2, ], aes(date, .data[[para]]), pch=21, size=3, fill=col.l) +
+    scale_y_continuous(trans="log10")
+  print(p)
+}
+
+print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
+
+# Set virtual core issues flag (2) for opp_evt_ratio
+id5.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+stat[id5.1, "flag"] <- 2
+id5.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+opp[id5.2, "flag"] <- 2
+```
+
+### Classification, Flag 3
+
+#### Size, Prochlorococcus
+
+```{r, classification-prochlorococcus}
+### Remove Prochlorococcus size outliers
+if (!is.na(curate$lim6_1)) {   # Some cruises don't gate for Pro
+  phyto <- "prochloro"
+  if (!any(unique(stat$pop) == phyto)) {
+    print(paste(phyto, "not found"))
+  }
+
+  # threshold
+  para <- "diam_mid_med"
+  df1 <- subset(stat, flag == 0 & pop == phyto)
+  out1 <- which(df1[, para] > curate$lim6_2 | df1[, para] < curate$lim6_1)
+  df1$quantile <- as.factor(df1$quantile)
+
+  # low pass filter
+  if (length(out1)!=0) {
+    df2 <- df1[-out1, ]
+  } else {
+    df2 <- df1
+  }
+
+  out2 <- c()
+
+  if (nrow(df2) > 0) {
+    model <- smooth.spline(df2$time, df2[, para])
+    res <- residuals(model)
+    out2 <- which(res < -curate$fact.sd6*sd(res) | res > curate$fact.sd6*sd(res))
+
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+      geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
+      geom_hline(yintercept = c(curate$lim6_1, curate$lim6_2), color=col.t, linetype="dashed") +
+      geom_point(data=df2[out2, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
+      ggtitle(paste(phyto))
+    print(p)
+  }
+
+  print(paste0(round(100 * length(c(out1, out2)) / (nrow(df1)), 2), "% outliers"))
+
+  # Set classification issues flag (3) for pro
+  id6 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+  stat[id6, "flag"] <- 3
+} # End Pro conditional
+```
+
+#### Size, Synechococcus
+
+```{r, classification-synechococcus}
+### Remove Synechococcus size outliers
+phyto <- "synecho"
+if (!any(unique(stat$pop) == phyto)) {
+  print(paste(phyto, "not found"))
+}
+
+# threshold
+para <- "diam_mid_med"
+df1 <- subset(stat, flag == 0 & pop == phyto)
+out1 <- which(df1[, para] > curate$lim7_2 | df1[, para] < curate$lim7_1)
+df1$quantile <- as.factor(df1$quantile)
+
+# low pass filter
+if (length(out1)!= 0) {
+  df2 <- df1[-out1, ]
+} else {
+  df2 <- df1
+}
+
+out2 <- c()
+
+if (nrow(df2) > 0) {
+  model <- smooth.spline(df2$time, df2[, para])
+  res <- residuals(model)
+  out2 <- which(res < -curate$fact.sd7*sd(res) | res > curate$fact.sd7*sd(res))
+
+  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+    geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
+    geom_hline(yintercept = c(curate$lim7_1, curate$lim7_2), color=col.t, linetype="dashed") +
+    geom_point(data=df2[out2, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
+    ggtitle(paste(phyto))
+  print(p)
+}
+
+print(paste0(round(100 * length(c(out1, out2)) / nrow(df1), 2), "% outliers"))
+
+# Set classification issues flag (3) for syn
+id7 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+stat[id7, "flag"] <- 3
+```
+
+#### Abundance, All Populations
+
+```{r, classification-abundance}
+## Abundance:  all populations ##
+if (curate$spar.8 == "missing" || curate$spar.8 == "NULL") {
+  curate$spar.8 <- NULL
+}
+
+df <- subset(stat, flag == 0 & quantile == 2.5)   # Easier to catch outliers when you don't consider all 3 quantiles
+para <- "abundance"
+all <- unique(df$pop)
+phyto <- all[-which(all == "unknown" | all == "beads")]
+
+OUT <- NULL
+for (i in c(phyto)) {
+  df1 <- subset(df, pop == i)
+  df1$quantile <- as.factor(df1$quantile)
+  if (nrow(df1) > 0) {
+    model <- smooth.spline(df1$time, df1[, para], spar = curate$spar.8)
+    res <- residuals(model)
+    out1 <- which(res < -curate$fact.sd8*sd(res) | res > curate$fact.sd8*sd(res))
+    out <-  as.vector(unlist(data.frame(filename=unique(df1[out1, "file_id"]))))
+    OUT <- unique(c(OUT, out))
+
+    print(paste0(round(100 * length(out) / nrow(df1), 2), "% outliers"))
+
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]]), fill = "grey", pch=21, size=3, alpha=0.25) +
+      geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
+      ggtitle(paste(i))
+    print(p)
+  }
+}
+
+# Set classification issues flag (3) for adundance
+id8 <- which(!is.na(match(stat[, "file_id"], OUT)))
+stat[id8, "flag"] <- 3
+```
+
+## Curated data
+
+```{r, curated-total-outliers}
+print(paste0(round(100 * nrow(stat[which(stat$flag != 0), ]) / nrow(stat), 2), "% outliers"))
+```
+
+### Abundance
+
+```{r, curated-plot-abundance, fig.width=8, fig.height=8}
+clean <- subset(stat, flag == 0 & pop != "beads" & pop != "unknown")
+if (nrow(clean) > 0) {
+  p <- popcycle::plot_time(clean, param = "abundance")
+  print(p)
+}
+```
+
+### Diameter (diam_mid_med)
+```{r, curated-plot-size, fig.width=8, fig.height=8}
+clean <- subset(stat, flag == 0 & pop != "beads" & pop != "unknown")
+if (nrow(clean) > 0) {
+  p <- popcycle::plot_time(clean, param = "diam_mid_med")
+  print(p)
+}
+```
+
+```{r, write-table}
+##########################
+### Save outlier table ###
+##########################
+df <- stat[match(unique(stat$file_id), stat$file_id), ]
+outliers <- data.frame(file = df$file_id, flag = df$flag)
+readr::write_tsv(outliers, file = save_path)
+```
