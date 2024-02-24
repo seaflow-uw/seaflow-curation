@@ -125,7 +125,6 @@ if (!is.na(curate$tcut1)) { # applies to only a few cruises
 
   print(p)
 
-  # Report percentage of data removed as outliers in this step
   print(paste0(round(100 * nout / nrow(df), 2), "% outliers"))
 
   # Set instrument issues flag (1) for time cutoffs
@@ -155,12 +154,12 @@ para <- "stream_pressure"
 df <- subset(stat, flag == 0 & pop == "unknown")
 out <- which(df[, para] > curate$lim1_2 | df[, para] < curate$lim1_1)
 
-print(paste0(round(100 * length(out) / nrow(df), 2), "% outliers"))
-
 p <- df %>% ggplot() + geom_point(aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = "grey") +
   geom_point(data=df[out, ], aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = col.t) +
   geom_hline(yintercept = c(curate$lim1_1, curate$lim1_2), color=col.t, linetype = "dashed")
 print(p)
+
+print(paste0(round(100 * length(out) / nrow(df), 2), "% outliers"))
 
 # Set instrument issues flag (1) for flow rate
 id1.1 <- which(!is.na(match(stat[, "file_id"], unique(df[out, "file_id"]))))
@@ -440,12 +439,12 @@ for (i in c(phyto)) {
     out <-  as.vector(unlist(data.frame(filename=unique(df1[out1, "file_id"]))))
     OUT <- unique(c(OUT, out))
 
-    print(paste0(round(100 * length(out) / nrow(df1), 2), "% outliers"))
-
     p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]]), fill = "grey", pch=21, size=3, alpha=0.25) +
       geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
       ggtitle(paste(i))
     print(p)
+
+    print(paste0(round(100 * length(out) / nrow(df1), 2), "% outliers"))
   }
 }
 
@@ -455,10 +454,6 @@ stat[id8, "flag"] <- 3
 ```
 
 ## Curated data
-
-```{r, curated-total-outliers}
-print(paste0(round(100 * nrow(stat[which(stat$flag != 0), ]) / nrow(stat), 2), "% outliers"))
-```
 
 ### Abundance
 
@@ -477,6 +472,10 @@ if (nrow(clean) > 0) {
   p <- popcycle::plot_time(clean, param = "diam_mid_med")
   print(p)
 }
+```
+
+```{r, curated-total-outliers}
+print(paste0(round(100 * nrow(stat[which(stat$flag != 0), ]) / nrow(stat), 2), "% outliers"))
 ```
 
 ```{r, write-table}
