@@ -4,7 +4,6 @@ output:
   html_document:
     toc: true
 params:
-  printcode: false
   db: null
   curation_config_path: null
   save_path: null
@@ -14,9 +13,29 @@ params:
   message: false
   error: false
   cache: false
+  printcode: false
 ---
 
+```{r, vscode-pre-setup, echo=FALSE, eval=FALSE}
+# Run this chunk manually to set custom params in vscode
+
+params_yaml <- "params:
+  db: null
+  curation_config_path: null
+  save_path: null
+  fig_width: 8
+  fig_height: 4
+  warning: false
+  message: false
+  error: false
+  cache: false
+  printcode: false"
+params <- yaml::yaml.load(params_yaml)$params
+```
+
 ```{r, setup, include=FALSE}
+library(tidyverse)
+
 knitr::opts_chunk$set(echo = params$printcode)
 knitr::opts_chunk$set(fig.width = params$fig_width)
 knitr::opts_chunk$set(fig.height = params$fig_height)
@@ -33,8 +52,6 @@ knitr::opts_chunk$set(eval = !(is.null(db) || is.null(curation_config_path) || i
 # Plotting setup
 col.t <- "deepskyblue3"
 col.l <- "red3"
-
-library(tidyverse)
 
 # Capture report date
 report_date <- Sys.time()
@@ -69,10 +86,22 @@ stat$time <- lubridate::ymd_hms(stat$time)
 stat$flag <- 0 # add a 'flag' column to the table or set to 0
 
 # get bead fsc coordinates used in OPP filtration
-# TODO: fix this for multiple filtering parameters
-# Just use the first param for now
-# filter_table <- popcycle::get_filter_table(db)
-# filter_plan_table <- popcycle::get_filter_plan_table(db)
+filter_table <- popcycle::get_filter_table(db)
+filter_plan_table <- popcycle::get_filter_plan_table(db)
+
+filter_table <- inner_join(filter_table, filter_plan_table, by = join_by(id == filter_id))
+filter_table <- filter_table %>%
+  select(id, quantile, beads_fsc_small, start_date) %>%
+  arrange(start_date, quantile)
+filter_table <- popcycle::transformData(filter_table, column = "beads_fsc_small")
+filter_dates <- filter_table %>%
+  group_by(id) %>%
+  summarise(start_date = unique(start_date)) %>%
+  arrange(start_date)
+filter_dates[nrow(filter_dates), "end_date"] <- max(stat$time)
+filter_dates$end_date <- lead(filter_dates$start_date)
+filter_dates[nrow(filter_dates), "end_date"] <- max(stat$time)
+filter_table <- inner_join(filter_table, filter_dates[, c("id", "end_date")], by = "id")
 
 fid <- unique(popcycle::get_filter_table(db)$id)[1]
 fsc.beads <- popcycle::transformData(popcycle::get_filter_params_by_id(db, fid), column="beads.fsc.small")$beads.fsc.small
@@ -93,7 +122,12 @@ opp$event_rate <- opp[, "all_count"] / 180 # calculate event rate per sec (using
 ```{r, instrument-calibration}
 ## Remove calibration or testing data ##
 if (!is.na(curate$tcut1)) { # applies to only a few cruises
-  df <- subset(stat, flag == 0 & pop == "unknown")
+  df <- stat %>%
+    filter(flag == 0) %>%
+    group_by(time, file_id, quantile) %>%
+    summarise(n_count = sum(n_count)) %>%
+    ungroup() %>%
+    as.data.frame()
   para <- "n_count"
   df$quantile <- as.factor(df$quantile)
 
@@ -151,7 +185,11 @@ if (!is.na(curate$tcut1)) { # applies to only a few cruises
 ```{r, instrument-flow-rate}
 ## Remove FLOW_RATE outliers
 para <- "stream_pressure"
-df <- subset(stat, flag == 0 & pop == "unknown")
+df <- stat %>%
+  filter(flag == 0) %>%
+  group_by(time) %>%
+  filter(row_number() == 1) %>%
+  as.data.frame()
 out <- which(df[, para] > curate$lim1_2 | df[, para] < curate$lim1_1)
 
 p <- df %>% ggplot() + geom_point(aes(time, .data[[para]]), pch=21, size=3, alpha=0.25, fill = "grey") +
@@ -264,7 +302,11 @@ if (!any(unique(stat$pop) == phyto)) {
     p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = log_abundance), pch=21, size=3, alpha=0.25) +
       geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
       geom_hline(yintercept = c(curate$lim4_1, curate$lim4_2), color=col.t, linetype="dashed") +
-      geom_hline(yintercept = fsc.beads, color = rep(c("red", "green", "blue"), 3)) +
+      geom_segment(
+        aes(x = start_date, xend = end_date, y = beads_fsc_small, yend = beads_fsc_small),
+        color = "red",
+        data = filter_table,
+      ) +
       ggtitle(paste(phyto)) +
       scale_y_continuous(trans="log10") +
       scale_fill_viridis_c() +
