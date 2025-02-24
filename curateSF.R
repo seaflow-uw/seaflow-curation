@@ -7,7 +7,7 @@ find_notebook <- function(args) {
     stop("no markdown notebook found")
   }
   script_dir <- normalizePath(dirname(script_path))
-  nb_path <- paste0(tools::file_path_sans_ext(basename(script_path)), ".Rmd")
+  nb_path <- paste0(tools::file_path_sans_ext(script_path), ".Rmd")
   return(nb_path)
 }
 
