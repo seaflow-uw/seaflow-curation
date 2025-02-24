@@ -1,24 +1,38 @@
 #!/usr/bin/env Rscript
 
+find_notebook <- function(args) {
+  script_path <- args[grep("^--file=", args)]
+  script_path <- sub("^--file=", "", script_path)
+  if (length(script_path) == 0) {
+    stop("no markdown notebook found")
+  }
+  script_dir <- normalizePath(dirname(script_path))
+  nb_path <- paste0(tools::file_path_sans_ext(basename(script_path)), ".Rmd")
+  return(nb_path)
+}
+
 # --------------------------------------------------------------------------- #
 # MAIN                                                                        #
 # --------------------------------------------------------------------------- #
 main <- function() {
+  markdown_file <- find_notebook(commandArgs(trailingOnly=FALSE))
   parser <- optparse::OptionParser(
-    usage = "usage: curateSF.R markdown_file db config_file outlier_output_file html_output_file",
+    usage = "usage: curateSF.R db config_file outlier_output_file html_output_file",
     description = "Curate a cruise, create an outlier table TSV file and report HTML file"
   )
   p <- optparse::parse_args2(parser)
 
-  if (length(p$args) != 5) {
+  if (length(p$args) != 4) {
     optparse::print_help(parser)
     quit(save="no")
   } else {
-    markdown_file <- p$args[1]
-    db <- p$args[2]
-    config_file <- p$args[3]
-    out_file <- p$args[4]
-    html_file <- p$args[5]
+    db <- p$args[1]
+    config_file <- p$args[2]
+    out_file <- p$args[3]
+    html_file <- p$args[4]
+    if (!file.exists(markdown_file)) {
+      stop(paste0(markdown_file, " does not exist"), call. = FALSE)
+    }
     if (!file.exists(db)) {
       stop(paste0(db, " does not exist"), call. = FALSE)
     }
@@ -49,7 +63,7 @@ main <- function() {
   intermediates_dir <- file.path(tmp_dir, "intermediates_dir")
   dir.create(output_dir)
   dir.create(intermediates_dir)
-  print(paste0("output_dir = ", intermediates_dir))
+  print(paste0("output_dir = ", output_dir))
   print(paste0("intermediates_dir = ", intermediates_dir))
 
   # https://bookdown.org/yihui/rmarkdown-cookbook/rmarkdown-render.html

@@ -98,13 +98,9 @@ filter_dates <- filter_table %>%
   group_by(id) %>%
   summarise(start_date = unique(start_date)) %>%
   arrange(start_date)
-filter_dates[nrow(filter_dates), "end_date"] <- max(stat$time)
 filter_dates$end_date <- lead(filter_dates$start_date)
 filter_dates[nrow(filter_dates), "end_date"] <- max(stat$time)
 filter_table <- inner_join(filter_table, filter_dates[, c("id", "end_date")], by = "id")
-
-fid <- unique(popcycle::get_filter_table(db)$id)[1]
-fsc.beads <- popcycle::transformData(popcycle::get_filter_params_by_id(db, fid), column="beads.fsc.small")$beads.fsc.small
 
 # load OPP table
 opp <- popcycle::get_opp_table(db, outlier_join = FALSE)
