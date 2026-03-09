@@ -471,24 +471,31 @@ for (i in c(phyto)) {
   df1 <- subset(df, pop == i)
   df1$quantile <- as.factor(df1$quantile)
   if (nrow(df1) > 0) {
-    model <- smooth.spline(df1$time, df1[, para], spar = curate$spar.8)
-    res <- residuals(model)
-    out1 <- which(res < -curate$fact.sd8*sd(res) | res > curate$fact.sd8*sd(res))
-    out <-  as.vector(unlist(data.frame(filename=unique(df1[out1, "file_id"]))))
-    OUT <- unique(c(OUT, out))
+    tryCatch({
+      model <- smooth.spline(df1$time, df1[, para], spar = curate$spar.8)
+    }, error = function(e) {
+      message(paste("Error in smooth.spline for", i, ":", e$message))
+      model <<- NULL
+    })
 
-    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]]), fill = "grey", pch=21, size=3, alpha=0.25) +
-      geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
-      ggtitle(paste(i))
-    print(p)
-
-    print(paste0(round(100 * length(out) / nrow(df1), 2), "% outliers"))
+    if (!is.null(model)) {
+      res <- residuals(model)
+      out1 <- which(res < -curate$fact.sd8*sd(res) | res > curate$fact.sd8*sd(res))
+      out <-  as.vector(unlist(data.frame(filename=unique(df1[out1, "file_id"]))))
+      OUT <- unique(c(OUT, out))
+      p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]]), fill = "grey", pch=21, size=3, alpha=0.25) +
+        geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, alpha=1, fill=col.l) +
+        ggtitle(paste(i))
+      print(p)
+      print(paste0(round(100 * length(out) / nrow(df1), 2), "% outliers"))
+      # Set classification issues flag (3) for adundance
+      id8 <- which(!is.na(match(stat[, "file_id"], OUT)))
+      stat[id8, "flag"] <- 3
+    } else {
+      print(paste("Skipping abundance outlier detection for", i, "due to smooth.spline error"))
+    }
   }
 }
-
-# Set classification issues flag (3) for adundance
-id8 <- which(!is.na(match(stat[, "file_id"], OUT)))
-stat[id8, "flag"] <- 3
 ```
 
 ## Curated data
