@@ -20,9 +20,9 @@ params:
 # Run this chunk manually to set custom params in vscode
 
 params_yaml <- "params:
-  db: null
-  curation_config_path: null
-  save_path: null
+  db: HOT326.vct.db
+  curation_config_path: HOT326.curation_params.tsv
+  save_path: HOT326.curation_outliers.tsv
   fig_width: 8
   fig_height: 4
   warning: false
@@ -219,24 +219,31 @@ if (length(out1) != 0) {
 }
 out2 <- c()
 if (nrow(df2) > 0) {
-  model <- smooth.spline(df2$date, df2[, para])
-  res <- residuals(model)
-  out2 <- which(res < -curate$fact.sd2*sd(res) | res > curate$fact.sd2*sd(res))
+  tryCatch({
+    model <- smooth.spline(df2$date, df2[, para])
+  }, error = function(e) {
+    message(paste("Error in smooth.spline for event rate:", e$message))
+    model <<- NULL
+  })
+  if (!is.null(model)) {
+    res <- residuals(model)
+    out2 <- which(res < -curate$fact.sd2*sd(res) | res > curate$fact.sd2*sd(res))
 
-  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") +
-    geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) +
-    geom_hline(yintercept = c(curate$lim2_1, curate$lim2_2), color=col.t, linetype="dashed") +
-    geom_point(data=df2[out2, ], aes(date, event_rate), pch=21, size=3, alpha=0.25, fill=col.l)
-  print(p)
+    p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") +
+      geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) +
+      geom_hline(yintercept = c(curate$lim2_1, curate$lim2_2), color=col.t, linetype="dashed") +
+      geom_point(data=df2[out2, ], aes(date, event_rate), pch=21, size=3, alpha=0.25, fill=col.l)
+    print(p)
+    print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
+    # Set instrument issues flag (1) for event rate
+    id2.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    stat[id2.1, "flag"] <- 1
+    id2.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    opp[id2.2, "flag"] <- 1
+  } else {
+    print(paste("Skipping event rate outlier detection due to smooth.spline error"))
+  }
 }
-
-print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
-
-# Set instrument issues flag (1) for event rate
-id2.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-stat[id2.1, "flag"] <- 1
-id2.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-opp[id2.2, "flag"] <- 1
 ```
 
 #### File Writing Errors
@@ -257,24 +264,31 @@ if (length(out1) != 0) {
 out2 <- c()
 
 if (nrow(df2) > 0) {
-  model <- smooth.spline(df2$date, df2[, para])
-  res <- residuals(model)
-  out2 <- which(res < -curate$fact.sd3*sd(res) | res > curate$fact.sd3*sd(res))
+  tryCatch({
+    model <- smooth.spline(df2$date, df2[, para])
+  }, error = function(e) {
+    message(paste("Error in smooth.spline for file writing issues:", e$message))
+    model <<- NULL
+  })
+  if (!is.null(model)) {
+    res <- residuals(model)
+    out2 <- which(res < -curate$fact.sd3*sd(res) | res > curate$fact.sd3*sd(res))
 
-  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") +
-    geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) +
-    geom_hline(yintercept = c(curate$lim3_1, curate$lim3_2), color=col.t, linetype="dashed") +
-    geom_point(data=df2[out2, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.l)
-  print(p)
+    p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill="grey") +
+      geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.t) +
+      geom_hline(yintercept = c(curate$lim3_1, curate$lim3_2), color=col.t, linetype="dashed") +
+      geom_point(data=df2[out2, ], aes(date, .data[[para]]), pch=21, size=3, alpha=0.25, fill=col.l)
+    print(p)
+    print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
+    # Set instrument issues flag (1) for file writing
+    id3.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    stat[id3.1, "flag"] <- 1
+    id3.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    opp[id3.2, "flag"] <- 1
+  } else {
+    print(paste("Skipping file writing outlier detection due to smooth.spline error"))
+  }
 }
-
-print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
-
-# Set instrument issues flag (1) for file writing
-id3.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-stat[id3.1, "flag"] <- 1
-id3.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-opp[id3.2, "flag"] <- 1
 ```
 
 ### Virtual Core, Flag 2
@@ -339,26 +353,31 @@ if (length(out1)!= 0) {
 out2 <- c()
 
 if (nrow(df2) > 0) {
-
-  model <- smooth.spline(df2$date, df2[, para])
-  res <- residuals(model)
-  out2 <- which(res < -curate$fact.sd5*sd(res) | res > curate$fact.sd5*sd(res))
-
-  p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+  tryCatch({
+    model <- smooth.spline(df2$date, df2[, para])
+  }, error = function(e) {
+    message(paste("Error in smooth.spline for OPP/EVT ratio:", e$message))
+    model <<- NULL
+  })
+  if (!is.null(model)) {
+    res <- residuals(model)
+    out2 <- which(res < -curate$fact.sd5*sd(res) | res > curate$fact.sd5*sd(res))
+    p <- df1 %>% ggplot() + geom_point(aes(date, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
     geom_point(data=df1[out1, ], aes(date, .data[[para]]), pch=21, size=3, fill=col.t) +
     geom_hline(yintercept = c(curate$lim5_1, curate$lim5_2), color=col.t, linetype="dashed") +
     geom_point(data=df2[out2, ], aes(date, .data[[para]]), pch=21, size=3, fill=col.l) +
     scale_y_continuous(trans="log10")
-  print(p)
+    print(p)
+    print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
+    # Set virtual core issues flag (2) for opp_evt_ratio
+    id5.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    stat[id5.1, "flag"] <- 2
+    id5.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    opp[id5.2, "flag"] <- 2
+  } else {
+    print(paste("Skipping OPP/EVT ratio outlier detection due to smooth.spline error"))
+  }
 }
-
-print(paste0(round(100 * length(c(out1, out2)) / nrow(df), 2), "% outliers"))
-
-# Set virtual core issues flag (2) for opp_evt_ratio
-id5.1 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-stat[id5.1, "flag"] <- 2
-id5.2 <- which(!is.na(match(opp[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-opp[id5.2, "flag"] <- 2
 ```
 
 ### Classification, Flag 3
@@ -389,23 +408,30 @@ if (!is.na(curate$lim6_1)) {   # Some cruises don't gate for Pro
   out2 <- c()
 
   if (nrow(df2) > 0) {
-    model <- smooth.spline(df2$time, df2[, para])
-    res <- residuals(model)
-    out2 <- which(res < -curate$fact.sd6*sd(res) | res > curate$fact.sd6*sd(res))
+    tryCatch({
+      model <- smooth.spline(df2$time, df2[, para])
+    }, error = function(e) {
+      message(paste("Error in smooth.spline for", i, ":", e$message))
+      model <<- NULL
+    })
+    if (!is.null(model)) {
+      res <- residuals(model)
+      out2 <- which(res < -curate$fact.sd6*sd(res) | res > curate$fact.sd6*sd(res))
 
-    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
-      geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
-      geom_hline(yintercept = c(curate$lim6_1, curate$lim6_2), color=col.t, linetype="dashed") +
-      geom_point(data=df2[out2, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
-      ggtitle(paste(phyto))
-    print(p)
+      p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+        geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
+        geom_hline(yintercept = c(curate$lim6_1, curate$lim6_2), color=col.t, linetype="dashed") +
+        geom_point(data=df2[out2, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
+        ggtitle(paste(phyto))
+      print(p)
+      print(paste0(round(100 * length(c(out1, out2)) / (nrow(df1)), 2), "% outliers"))
+      # Set classification issues flag (3) for pro
+      id6 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+      stat[id6, "flag"] <- 3
+    } else {
+      print(paste("Skipping Prochlorococcus size outlier detection due to smooth.spline error"))
+    }
   }
-
-  print(paste0(round(100 * length(c(out1, out2)) / (nrow(df1)), 2), "% outliers"))
-
-  # Set classification issues flag (3) for pro
-  id6 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-  stat[id6, "flag"] <- 3
 } # End Pro conditional
 ```
 
@@ -434,23 +460,31 @@ if (length(out1)!= 0) {
 out2 <- c()
 
 if (nrow(df2) > 0) {
-  model <- smooth.spline(df2$time, df2[, para])
-  res <- residuals(model)
-  out2 <- which(res < -curate$fact.sd7*sd(res) | res > curate$fact.sd7*sd(res))
+  tryCatch({
+    model <- smooth.spline(df2$time, df2[, para])
+  }, error = function(e) {
+    message(paste("Error in smooth.spline for", i, ":", e$message))
+    model <<- NULL
+  })
+  
+  if (!is.null(model)) {
+    res <- residuals(model)
+    out2 <- which(res < -curate$fact.sd7*sd(res) | res > curate$fact.sd7*sd(res))
 
-  p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
-    geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
-    geom_hline(yintercept = c(curate$lim7_1, curate$lim7_2), color=col.t, linetype="dashed") +
-    geom_point(data=df2[out2, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
-    ggtitle(paste(phyto))
-  print(p)
+    p <- df1 %>% ggplot() + geom_point(aes(time, .data[[para]], fill = quantile), pch=21, size=3, alpha=0.25) +
+      geom_point(data=df1[out1, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.t) +
+      geom_hline(yintercept = c(curate$lim7_1, curate$lim7_2), color=col.t, linetype="dashed") +
+      geom_point(data=df2[out2, ], aes(time, .data[[para]]), pch=21, size=3, fill=col.l) +
+      ggtitle(paste(phyto))
+    print(p)
+    print(paste0(round(100 * length(c(out1, out2)) / nrow(df1), 2), "% outliers"))
+    # Set classification issues flag (3) for syn
+    id7 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
+    stat[id7, "flag"] <- 3
+  } else {
+    print(paste("Skipping Synechococcus size outlier detection due to smooth.spline error"))
+  }
 }
-
-print(paste0(round(100 * length(c(out1, out2)) / nrow(df1), 2), "% outliers"))
-
-# Set classification issues flag (3) for syn
-id7 <- which(!is.na(match(stat[, "file_id"], unique(c(df1[out1, "file_id"], df2[out2, "file_id"])))))
-stat[id7, "flag"] <- 3
 ```
 
 #### Abundance, All Populations
