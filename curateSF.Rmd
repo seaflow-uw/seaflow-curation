@@ -411,7 +411,7 @@ if (!is.na(curate$lim6_1)) {   # Some cruises don't gate for Pro
     tryCatch({
       model <- smooth.spline(df2$time, df2[, para])
     }, error = function(e) {
-      message(paste("Error in smooth.spline for", i, ":", e$message))
+      message(paste("Error in smooth.spline for", phyto, ":", e$message))
       model <<- NULL
     })
     if (!is.null(model)) {
@@ -463,7 +463,7 @@ if (nrow(df2) > 0) {
   tryCatch({
     model <- smooth.spline(df2$time, df2[, para])
   }, error = function(e) {
-    message(paste("Error in smooth.spline for", i, ":", e$message))
+    message(paste("Error in smooth.spline for", phyto, ":", e$message))
     model <<- NULL
   })
   
